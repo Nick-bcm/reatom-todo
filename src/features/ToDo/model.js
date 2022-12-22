@@ -1,5 +1,4 @@
 import { atom, action } from '@reatom/core'
-import _ from 'lodash'
 
 export const VISIBILITY_FILTERS = {
   ALL: 'all',
@@ -12,8 +11,6 @@ export const setFilter = action(
   (ctx, event) => filterAtom(ctx, event.currentTarget.value),
   'setFilter'
 )
-
-// TODO: переделать на список id с content
 
 export const inputAtom = atom('', 'inputAtom')
 export const onInput = action(
@@ -49,57 +46,92 @@ const api = {
     }),
 }
 
-export const toDoListAtom = atom([], 'toDoList')
+const createToDoItemAtom = ({ id, title, isDone }) => (
+  atom({ id, title, isDone: atom(isDone, 'toDoItem.isDone') }, 'toDoItem')
+)
+
+export const toDoContentAtom = atom({}, 'toDoContent')
+
+export const toDoIdsAtom = atom((ctx) => {
+  const toDoContent = ctx.spy(toDoContentAtom)
+
+  return Object.keys(toDoContent)
+}, 'toDoIds')
+
+export const toDoVisibleIdsAtom = atom((ctx) => {
+  const content = ctx.spy(toDoContentAtom)
+  const ids = ctx.get(toDoIdsAtom)
+  const filter = ctx.spy(filterAtom)
+
+  if (filter === VISIBILITY_FILTERS.ALL) return ids
+
+  return ids.reduce((acc, id) => {
+    const isDone = ctx.spy(ctx.get(content[id]).isDone)
+    const isShowDone = filter === VISIBILITY_FILTERS.COMPLETED && isDone
+    const isShowUndone = filter === VISIBILITY_FILTERS.INCOMPLETE && !isDone
+
+    return isShowDone || isShowUndone ? [...acc, id] : acc
+  }, [])
+}, 'toDoVisibleIds')
+
 export const fetchList = action(
-  (ctx) =>
+  (ctx) => (
     ctx.schedule(async () => {
       const toDoListDto = await api.getList()
-      const list = toDoListDto.map(({ id, title, isDone }) =>
-        atom({ id, title, isDone: atom(isDone, 'toDoItem.isDone') }, 'toDoItem')
+
+      toDoContentAtom(
+        ctx,
+        toDoListDto.reduce(
+          (acc, item) => ({
+            ...acc,
+            [item.id]: createToDoItemAtom(item),
+          }),
+          {}
+        )
       )
-      toDoListAtom(ctx, list)
-    }),
+    })
+  ),
   'fetchList'
 )
 
 export const createToDoItem = action(
-  (ctx, payload) =>
+  (ctx, payload) => (
     ctx.schedule(async () => {
-      const { id, title, isDone } = await api.createItem(payload)
-      const newToDo = atom(
-        { id, title, isDone: atom(isDone, 'toDoItem.isDone') },
-        'toDoItem'
-      )
-      toDoListAtom(ctx, (list) => [newToDo, ...list])
+      const item = await api.createItem(payload)
+      const newToDo = createToDoItemAtom(item)
+
+      toDoContentAtom(ctx, (content) => ({ ...content, [item.id]: newToDo }))
       inputAtom(ctx, '')
-    }),
+    })
+  ),
   'createToDoItem'
 )
 
 export const saveToDoItem = action(
-  (ctx, payload) =>
+  (ctx, payload) => (
     ctx.schedule(async () => {
       const { id, title, isDone } = await api.patchItem(payload)
-      const itemToUpdate = _.find(
-        ctx.get(toDoListAtom),
-        (atom) => ctx.get(atom).id === id
-      )
+      const itemToUpdate = ctx.get(toDoContentAtom)[id]
+
       ctx.get(itemToUpdate).isDone(ctx, isDone)
-    }),
+    })
+  ),
   'saveToDoItem'
 )
 
 export const deleteToDoItem = action(
-  (ctx, itemId) =>
+  (ctx, itemId) => (
     ctx.schedule(async () => {
       const response = await api.deleteItem(itemId)
       if (response) {
-        const list = ctx.get(toDoListAtom).filter((toDoItemAtom) => {
-          const { id } = ctx.get(toDoItemAtom)
-          return id !== itemId
+        toDoContentAtom(ctx, (content) => {
+          const newContent = { ...content }
+          delete newContent[itemId]
+
+          return newContent
         })
-        toDoListAtom(ctx, list)
       }
-    }),
+    })
+  ),
   'deleteToDoItem'
 )

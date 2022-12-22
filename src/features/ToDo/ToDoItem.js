@@ -4,8 +4,8 @@ import { saveToDoItem, deleteToDoItem } from './model'
 
 const ToDoItem = ({ atom }) => {
   const [{ id, title, isDone }] = useAtom(atom)
-
   const [isDoneToDo] = useAtom(isDone)
+
   const handleChange = useAction(saveToDoItem)
   const handleDelete = useAction(deleteToDoItem)
 

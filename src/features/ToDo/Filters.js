@@ -1,3 +1,4 @@
+import React from 'react'
 import { useAction, useAtom } from '@reatom/npm-react'
 
 import { VISIBILITY_FILTERS, filterAtom, setFilter } from './model'
@@ -8,12 +9,12 @@ const Filters = () => {
   const changeFilter = useAction(setFilter)
 
   return (
-    <div className="btn-group" role="group" arialabel="Basic radio toggle button group">
+    <div className="btn-group  btn-group-sm" role="group">
       {filterKeys.map((key) => {
         const filter = VISIBILITY_FILTERS[key]
-        // TODO: добавить key
+
         return (
-          <>
+          <React.Fragment key={key}>
             <input
               type="radio"
               className="btn-check"
@@ -27,7 +28,7 @@ const Filters = () => {
             <label className="btn btn-outline-primary" htmlFor={`filter_${filter}`}>
               {filter}
             </label>
-          </>
+          </React.Fragment>
         )
       })}
     </div>
